@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant hc (&:where(.high-contrast, .high-contrast *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  z-index: 1 !important;
+}
+
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-control-container {
+  z-index: 2 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 3 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 4 !important;
+}
+
+/* Custom scrollbar for a cleaner look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #a1a1aa; /* zinc-400 */
+  border-radius: 10px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* zinc-700 */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #71717a; /* zinc-500 */
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b; /* zinc-600 */
+}
+
+/* High Contrast Mode */
+:root.high-contrast {
+  --tw-text-opacity: 1;
+}
+
+:root.high-contrast body {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+:root.high-contrast .bg-white,
+:root.high-contrast [class*="bg-white"] {
+  background-color: #000 !important;
+  border-color: #fff !important;
+}
+
+:root.high-contrast .text-zinc-900,
+:root.high-contrast .text-zinc-100,
+:root.high-contrast .text-zinc-50,
+:root.high-contrast .dark\:text-zinc-100,
+:root.high-contrast .dark\:text-zinc-50,
+:root.high-contrast .dark\:text-zinc-200 {
+  color: #fff !important;
+}
+
+:root.high-contrast .text-zinc-700,
+:root.high-contrast .text-zinc-600,
+:root.high-contrast .text-zinc-500,
+:root.high-contrast .dark\:text-zinc-400,
+:root.high-contrast .dark\:text-zinc-300 {
+  color: #e5e5e5 !important;
+}
+
+:root.high-contrast .border-zinc-200,
+:root.high-contrast .border-zinc-800,
+:root.high-contrast .dark\:border-zinc-700,
+:root.high-contrast .dark\:border-zinc-800,
+:root.high-contrast .border-zinc-300 {
+  border-color: #fff !important;
+}
+
+:root.high-contrast .bg-zinc-50,
+:root.high-contrast .bg-zinc-100,
+:root.high-contrast .dark\:bg-zinc-950,
+:root.high-contrast .dark\:bg-zinc-900,
+:root.high-contrast .dark\:bg-zinc-800 {
+  background-color: #111 !important;
+}
+
+:root.high-contrast input,
+:root.high-contrast textarea {
+  background-color: #111 !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+}
+
+:root.high-contrast button {
+  border: 2px solid #fff !important;
+}
+
+:root.high-contrast .bg-emerald-500 {
+  background-color: #00ff00 !important;
+}
+
+:root.high-contrast .text-emerald-500 {
+  color: #00ff00 !important;
+}
+
+:root.high-contrast a {
+  color: #00ffff !important;
+  text-decoration: underline !important;
+}
+
+:root.high-contrast .bg-rose-500,
+:root.high-contrast .bg-amber-500 {
+  background-color: #ff0000 !important;
+}
+
+:root.high-contrast .text-rose-500,
+:root.high-contrast .text-amber-500 {
+  color: #ff8800 !important;
+}
+
+:root.high-contrast .leaflet-tile-pane {
+  filter: contrast(1.2) brightness(0.9);
+}
+
+/* Focus styles for keyboard navigation */
+:focus-visible {
+  outline: 3px solid #10b981 !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+}
+
+:root.high-contrast :focus-visible {
+  outline-color: #00ff00 !important;
+}
+
+/* Skip to main content link for screen readers */
+.skip-link {
+  position: absolute;
+  top: -9999px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  padding: 1rem;
+  background: #10b981;
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  border-radius: 0 0 8px 8px;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
