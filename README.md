@@ -116,6 +116,7 @@ UI Visualization (Map + Risk Segments)
 - Pre-trained and served via API
 
 ---
+
 ## 📁 Project Structure
 
 SafeRoute/
@@ -136,6 +137,7 @@ SafeRoute/
 │
 ├── .env
 ├── README.md
+
 
 
 ---
