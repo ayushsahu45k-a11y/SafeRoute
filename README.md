@@ -114,7 +114,3 @@ UI Visualization (Map + Risk Segments)
 ### Model:
 - Lightweight & optimized for real-time inference
 - Pre-trained and served via API
-
----
-
----
