@@ -117,27 +117,4 @@ UI Visualization (Map + Risk Segments)
 
 ---
 
-## 📁 Project Structure
-
-
-SafeRoute/
-├── frontend/
-│ ├── components/
-│ ├── pages/
-│ ├── services/
-|
-├── backend/
-│ ├── routes/
-│ ├── controllers/
-│
-├── model/
-│ ├── risk_model.pkl
-│
-├── utils/
-│ ├── helpers/
-│
-├── .env
-├── README.md
-
-
 ---
