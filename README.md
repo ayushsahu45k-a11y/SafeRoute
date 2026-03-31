@@ -117,6 +117,9 @@ UI Visualization (Map + Risk Segments)
 
 ---
 
+## 📁 Project Structure
+
+
 SafeRoute/
 ├── frontend/
 │ ├── components/
@@ -135,3 +138,6 @@ SafeRoute/
 │
 ├── .env
 ├── README.md
+
+
+---
