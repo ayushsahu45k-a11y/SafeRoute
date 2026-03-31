@@ -114,3 +114,28 @@ UI Visualization (Map + Risk Segments)
 ### Model:
 - Lightweight & optimized for real-time inference
 - Pre-trained and served via API
+
+---
+## 📁 Project Structure
+
+SafeRoute/
+├── frontend/
+│ ├── components/
+│ ├── pages/
+│ ├── services/
+│
+├── backend/
+│ ├── routes/
+│ ├── controllers/
+│
+├── model/
+│ ├── risk_model.pkl
+│
+├── utils/
+│ ├── helpers/
+│
+├── .env
+├── README.md
+
+
+---
