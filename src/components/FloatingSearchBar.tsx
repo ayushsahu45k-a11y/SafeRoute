@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, MapPin, X } from 'lucide-react';
+import { Search, MapPin, X, Landmark, Stethoscope, Fuel, ParkingCircle, ShieldAlert } from 'lucide-react';
 
 interface SearchResult {
   place_id: number;
@@ -22,6 +22,7 @@ export default function FloatingSearchBar({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -93,8 +94,8 @@ export default function FloatingSearchBar({
     setQuery(result.display_name);
     setIsOpen(false);
     setResults([]);
+    setActiveCategory(null);
     
-    // Save to recent searches
     try {
       const recents = JSON.parse(localStorage.getItem('recentSearches') || '[]');
       const newRecent = {
@@ -117,15 +118,41 @@ export default function FloatingSearchBar({
     setQuery('');
     setResults([]);
     setIsOpen(false);
+    setActiveCategory(null);
+    inputRef.current?.focus();
+  };
+
+  const handleCategoryClick = (cat: { label: string; query: string }) => {
+    const isAlreadyActive = activeCategory === cat.label;
+    
+    if (isAlreadyActive) {
+      // Deselect
+      setActiveCategory(null);
+      setQuery('');
+      setResults([]);
+      setIsOpen(false);
+      return;
+    }
+
+    setActiveCategory(cat.label);
+    
+    // Build location-aware query
+    let searchQuery = cat.query;
+    if (viewState?.latitude && viewState?.longitude) {
+      searchQuery = `${cat.query} near ${viewState.latitude.toFixed(4)},${viewState.longitude.toFixed(4)}`;
+    }
+
+    setQuery(cat.query); // show clean label in input
+    searchPlaces(cat.query); // search with POI term (server adds viewbox from lat/lon)
     inputRef.current?.focus();
   };
 
   const categories = [
-    { label: 'ATM', query: 'ATM' },
-    { label: 'Hospital', query: 'hospital' },
-    { label: 'Petrol', query: 'petrol pump' },
-    { label: 'Parking', query: 'parking' },
-    { label: 'Police', query: 'police station' },
+    { label: 'ATM', query: 'ATM', icon: Landmark },
+    { label: 'Hospital', query: 'hospital', icon: Stethoscope },
+    { label: 'Petrol', query: 'petrol pump', icon: Fuel },
+    { label: 'Parking', query: 'parking', icon: ParkingCircle },
+    { label: 'Police', query: 'police station', icon: ShieldAlert },
   ];
 
   return (
@@ -137,7 +164,7 @@ export default function FloatingSearchBar({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setActiveCategory(null); }}
           onFocus={() => results.length > 0 && setIsOpen(true)}
           placeholder="Search city, address, ATM, hospital..."
           className="flex-1 bg-transparent outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
@@ -160,6 +187,13 @@ export default function FloatingSearchBar({
         <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden z-[10002]">
           {results.length > 0 ? (
             <div className="max-h-80 overflow-y-auto">
+              {activeCategory && (
+                <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800">
+                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                    Nearby {activeCategory}s
+                  </p>
+                </div>
+              )}
               {results.map((result, index) => (
                 <button
                   key={result.place_id || index}
@@ -186,11 +220,11 @@ export default function FloatingSearchBar({
           ) : query.length >= 2 && !isLoading ? (
             <div className="p-6 text-center">
               <p className="text-sm text-zinc-500">No results found for "{query}"</p>
-              <p className="text-xs text-zinc-400 mt-1">Try different keywords</p>
+              <p className="text-xs text-zinc-400 mt-1">Try different keywords or move the map to your area</p>
             </div>
           ) : isLoading ? (
             <div className="p-6 text-center">
-              <p className="text-sm text-zinc-500">Searching...</p>
+              <p className="text-sm text-zinc-500">Searching nearby {activeCategory || 'places'}...</p>
             </div>
           ) : null}
         </div>
@@ -198,18 +232,24 @@ export default function FloatingSearchBar({
 
       {/* Category Buttons */}
       <div className="flex gap-2 mt-3 flex-wrap">
-        {categories.map((cat) => (
-          <button
-            key={cat.label}
-            onClick={() => {
-              setQuery(cat.query);
-              searchPlaces(cat.query);
-            }}
-            className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors"
-          >
-            {cat.label}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.label;
+          return (
+            <button
+              key={cat.label}
+              onClick={() => handleCategoryClick(cat)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                isActive
+                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-md scale-105'
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-300 dark:hover:border-emerald-600'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {cat.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
