@@ -1,11 +1,14 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const GEMINI_API_KEY = 'AIzaSyDnT-o1Lxw_NcEFA5f2yxI5qnrjEPWzHRQ';
 
@@ -117,13 +120,12 @@ function geocodeFallback(query: string) {
   return results;
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+// ─── Create Express app at module level (required for Vercel serverless) ───
+const app = express();
 
-  app.use(cors());
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // --- API Endpoints ---
 
@@ -395,24 +397,29 @@ async function startServer() {
     });
   });
 
-  // Vite middleware
-  if (process.env.NODE_ENV !== 'production') {
+// ─── Static file serving (production only) ────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
+// ─── Export for Vercel serverless ─────────────────────────────────────────
+export default app;
+
+// ─── Local dev: start Vite + Express together ─────────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  (async () => {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.listen(3000, '0.0.0.0', () => {
+      console.log('Server running on http://localhost:3000');
     });
-  }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  })();
 }
-
-startServer();
