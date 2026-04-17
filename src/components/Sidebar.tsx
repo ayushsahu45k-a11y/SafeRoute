@@ -266,24 +266,30 @@ export default function Sidebar({
     return () => clearTimeout(timer);
   }, [endQuery, endLoc]);
 
-  const handleUseCurrentLocation = () => {
-    if ('geolocation' in navigator) {
+  const handleUseCurrentLocation = (): Promise<[number, number] | null> => {
+    return new Promise((resolve) => {
+      if (!('geolocation' in navigator)) {
+        setError('Geolocation is not supported by your browser.');
+        resolve(null);
+        return;
+      }
       setLoading(true);
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
+        (position) => {
           const { latitude, longitude } = position.coords;
-          setStartLoc([longitude, latitude]);
+          const loc: [number, number] = [longitude, latitude];
+          setStartLoc(loc);
           setStartQuery('Current Location');
           setLoading(false);
+          resolve(loc);
         },
-        (err) => {
+        () => {
           setError('Could not get current location. Please check permissions or allow location access.');
           setLoading(false);
+          resolve(null);
         }
       );
-    } else {
-      setError('Geolocation is not supported by your browser.');
-    }
+    });
   };
 
   const handleDetectCurrentLocation = () => {
@@ -304,28 +310,28 @@ export default function Sidebar({
   };
 
   const handleCalculate = async () => {
-    if (!startLoc) {
+    let resolvedStartLoc = startLoc;
+    if (!resolvedStartLoc) {
       if (startQuery.toLowerCase().includes('current')) {
-        handleUseCurrentLocation();
         setError('Getting your current location...');
-        setTimeout(() => {
-          if (startLoc) setError('');
-        }, 2000);
-        return;
-      }
-      if (startResults.length > 0) {
+        resolvedStartLoc = await handleUseCurrentLocation();
+        if (!resolvedStartLoc) return;
+        setError('');
+      } else
+       if (startResults.length > 0) {
         const firstResult = startResults[0];
         setStartQuery(firstResult.place_name);
-        setStartLoc(firstResult.center);
+        resolvedStartLoc = firstResult.center as [number, number];
+        setStartLoc(resolvedStartLoc);
         setStartResults([]);
         setError('Using first search result for origin...');
         setTimeout(() => setError(''), 2000);
+      } else {
+        setError('Please enter a start location and select it from the dropdown, or click the crosshair button for Current Location.');
+        startInputRef.current?.focus();
+        announceToScreenReader('Start location required. Please enter and select a start location.');
         return;
       }
-      setError('Please enter a start location and select it from the dropdown, or click the crosshair button for Current Location.');
-      startInputRef.current?.focus();
-      announceToScreenReader('Start location required. Please enter and select a start location.');
-      return;
     }
     if (!endLoc) {
       if (endResults.length > 0) {
@@ -365,7 +371,7 @@ export default function Sidebar({
       setRiskData(null);
       setAlternativeRoutes([]);
 
-      const allPoints: [number, number][] = [startLoc];
+      const allPoints: [number, number][] = [resolvedStartLoc!];
       waypoints.forEach(w => { if (w.loc) allPoints.push(w.loc); });
       allPoints.push(endLoc);
 
@@ -373,7 +379,7 @@ export default function Sidebar({
       let altRoutes: any[] = [];
 
       if (allPoints.length === 2) {
-        const routes = await getRoute(startLoc, endLoc, vehicleType);
+        const routes = await getRoute(resolvedStartLoc!, endLoc, vehicleType);
         if (!routes || routes.length === 0) {
           throw new Error(`No route found between "${startQuery}" and "${endQuery}". Try different locations or check spelling.`);
         }
@@ -397,7 +403,7 @@ export default function Sidebar({
         primaryRoute = cumulativeRoute;
       }
 
-      const weatherData = await getWeather(startLoc[1], startLoc[0]);
+      const weatherData = await getWeather(resolvedStartLoc![1], resolvedStartLoc![0]);
       setWeather(weatherData);
 
       const weatherCondition = weatherData.weather?.[0]?.main || 'Clear';
@@ -410,7 +416,7 @@ export default function Sidebar({
       setRiskData(analysis.segments);
       setIncidentsData(analysis.incidents);
 
-      saveTripToHistory(startLoc, endLoc, primaryRoute, analysis.segments, weatherData);
+      saveTripToHistory(resolvedStartLoc!, endLoc, primaryRoute, analysis.segments, weatherData);
 
       const safetyScore = Math.round((1 - analysis.overallRisk) * 100);
       announceToScreenReader(`Route calculated! Distance: ${(primaryRoute.distance / 1000).toFixed(1)} kilometers. Safety score: ${safetyScore}%`);
