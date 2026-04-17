@@ -478,6 +478,33 @@ export default function Sidebar({
   // Calculate safety percentage (inverse of risk)
   const safePercentage = Math.round((1 - overallRisk) * 100);
 
+  // ── Vehicle-specific stats ──────────────────────────────────────────────
+  // Speed references: car avg 40 km/h city, bike avg 15 km/h city
+  const CAR_SPEED_KMH = 40;
+  const BIKE_SPEED_KMH = 15;
+
+  const distanceKm = routeData ? routeData.distance / 1000 : 0;
+
+  // For car: use OSRM duration directly
+  // For bike: recalculate from distance using bike speed (OSRM gives car time)
+  const carDurationMin = routeData ? Math.round(routeData.duration / 60) : 0;
+  const bikeDurationMin = distanceKm > 0 ? Math.round((distanceKm / BIKE_SPEED_KMH) * 60) : 0;
+
+  const displayDurationMin = vehicleType === 'cycling' ? bikeDurationMin : carDurationMin;
+
+  // Safety score adjustments per vehicle:
+  // Cycling is inherently riskier on same road → reduce score by up to 10 pts
+  // Also factor in distance: longer bike ride = more exposure
+  const cyclingSafetyPenalty = vehicleType === 'cycling'
+    ? Math.min(12, Math.round(distanceKm * 0.4 + 5))
+    : 0;
+  const vehicleSafePercentage = Math.max(10, safePercentage - cyclingSafetyPenalty);
+
+  // Display label differs per vehicle
+  const vehicleSpeedLabel = vehicleType === 'cycling'
+    ? `~${BIKE_SPEED_KMH} km/h avg`
+    : `~${CAR_SPEED_KMH} km/h avg`;
+
   const [width, setWidth] = useState(384); // 384px is w-96
   const [isResizing, setIsResizing] = useState(false);
 
@@ -924,21 +951,34 @@ export default function Sidebar({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
+                  <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-1">
                     <Navigation size={16} />
                     <span className="text-xs font-medium uppercase">Distance</span>
                   </div>
                   <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
-                    {(routeData.distance / 1000).toFixed(1)} <span className="text-sm text-zinc-500">km</span>
+                    {distanceKm.toFixed(1)} <span className="text-sm text-zinc-500">km</span>
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1">
+                    {vehicleType === 'cycling' ? (
+                      <span className="inline-flex items-center gap-1">🚲 {vehicleSpeedLabel}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">🚗 {vehicleSpeedLabel}</span>
+                    )}
                   </p>
                 </div>
                 <div className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
+                  <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-1">
                     <Clock size={16} />
                     <span className="text-xs font-medium uppercase">Est. Time</span>
                   </div>
                   <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
-                    {Math.round(routeData.duration / 60)} <span className="text-sm text-zinc-500">min</span>
+                    {displayDurationMin >= 60
+                      ? <>{Math.floor(displayDurationMin / 60)}<span className="text-sm text-zinc-500">h </span>{displayDurationMin % 60}<span className="text-sm text-zinc-500">m</span></>
+                      : <>{displayDurationMin} <span className="text-sm text-zinc-500">min</span></>
+                    }
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-1">
+                    {vehicleType === 'cycling' ? 'by bike' : 'by car'}
                   </p>
                 </div>
               </div>
@@ -956,18 +996,23 @@ export default function Sidebar({
                       <Info size={14} />
                     </button>
                   </div>
-                  <span className={`text-2xl font-bold ${
-                    riskLevel === 'low' ? 'text-emerald-500' : 
-                    riskLevel === 'moderate' ? 'text-amber-500' : 'text-rose-500'
-                  }`}>
-                    {safePercentage}%
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className={`text-2xl font-bold ${
+                      riskLevel === 'low' ? 'text-emerald-500' : 
+                      riskLevel === 'moderate' ? 'text-amber-500' : 'text-rose-500'
+                    }`}>
+                      {vehicleSafePercentage}%
+                    </span>
+                    {vehicleType === 'cycling' && cyclingSafetyPenalty > 0 && (
+                      <span className="text-[10px] text-amber-500 font-medium">-{cyclingSafetyPenalty}pts bike risk</span>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden relative z-10">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${safePercentage}%` }}
+                    animate={{ width: `${vehicleSafePercentage}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className={`h-full rounded-full ${
                       riskLevel === 'low' ? 'bg-emerald-500' : 
