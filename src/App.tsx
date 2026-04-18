@@ -18,6 +18,7 @@ import { IncidentReportModal } from './components/IncidentReportModal';
 import { RouteLoadingSkeleton } from './components/SkeletonLoader';
 import { requestNotificationPermission, showRouteAlert } from './lib/notifications';
 import { useKeyboardShortcuts } from './hooks';
+import AdminDashboard from './pages/AdminDashboard';
 import { getCached, setCache, generateRouteCacheKey } from './lib/routeCache';
 import { geocode, getRoute } from './lib/api';
 
@@ -1019,6 +1020,7 @@ export default function App() {
               />
             } />
             <Route path="/about" element={<AboutTab />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </div>
 
