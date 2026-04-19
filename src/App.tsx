@@ -21,7 +21,6 @@ import { useKeyboardShortcuts } from './hooks';
 import AdminDashboard from './pages/AdminDashboard';
 import { getCached, setCache, generateRouteCacheKey } from './lib/routeCache';
 import { geocode, getRoute } from './lib/api';
-import LoginPage from './pages/LoginPage';
 
 function MapTab({ 
   isSidebarOpen,
@@ -891,27 +890,30 @@ export default function App() {
       return false;
     }
   });
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem('authToken');
-  });
 
-  const handleLogin = (profile: { id: string; name: string; email: string; photo?: string }, _token: string) => {
-    const user = {
-      id: profile.id,
-      name: profile.name,
-      email: profile.email,
-      photo: profile.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.name)}`
-    };
-    setUserProfile(user);
-    setIsLoggedIn(true);
-    localStorage.setItem('userProfile', JSON.stringify(user));
+  const handleLogin = (profile?: { name: string; email: string; photo?: string }) => {
+    if (profile) {
+      const user = {
+        name: profile.name,
+        email: profile.email,
+        photo: profile.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.name)}`
+      };
+      setUserProfile(user);
+      localStorage.setItem('userProfile', JSON.stringify(user));
+    } else {
+      const mockUser = {
+        name: 'Guest User',
+        email: 'guest@example.com',
+        photo: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'
+      };
+      setUserProfile(mockUser);
+      localStorage.setItem('userProfile', JSON.stringify(mockUser));
+    }
   };
 
   const handleLogout = () => {
     setUserProfile(null);
-    setIsLoggedIn(false);
     localStorage.removeItem('userProfile');
-    localStorage.removeItem('authToken');
   };
 
   const handleUpdateProfile = (name: string, email: string, photo: string) => {
@@ -964,22 +966,20 @@ export default function App() {
 
   return (
     <Router>
-      {!isLoggedIn ? (
-        <LoginPage onLogin={handleLogin} />
-      ) : (
-        <div className="relative w-full h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex transition-colors duration-300">
-          <ThinSidebar 
-            userProfile={userProfile} 
-            onLogout={handleLogout} 
-            isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen}
-            onSelectLocation={(loc, name) => {
-              setEndLoc(loc);
-              setEndQuery(name);
-            }}
-            currentEndLoc={endLoc}
-            currentEndQuery={endQuery}
-          />
+      <div className="relative w-full h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex transition-colors duration-300">
+        <ThinSidebar 
+          userProfile={userProfile} 
+          onLogin={handleLogin} 
+          onLogout={handleLogout} 
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          onSelectLocation={(loc, name) => {
+            setEndLoc(loc);
+            setEndQuery(name);
+          }}
+          currentEndLoc={endLoc}
+          currentEndQuery={endQuery}
+        />
         <div className="flex-1 relative flex flex-col h-full">
           <Routes>
             <Route path="/" element={
@@ -1037,7 +1037,6 @@ export default function App() {
           />
         )}
       </div>
-      )}
     </Router>
   );
 }

@@ -129,7 +129,7 @@ function generateLocalResponse(userMsg: string, routeData: any, riskData: any, w
   return `I'm here to help! 😊\n\nTry asking:\n• "Is my route safe?"\n• "What's the weather?"\n• "Traffic conditions"\n• "Driving tips"`;
 }
 
-function getContextInfoForAI(routeData: any, riskData: any, weather: any) {
+function getContextInfo(routeData: any, riskData: any, weather: any) {
   const avgRisk = riskData?.length > 0 
     ? Math.round((riskData.reduce((a: number, b: any) => a + (b.risk_probability || 0), 0) / riskData.length) * 100)
     : null;
@@ -524,7 +524,7 @@ export default function AIAssistant({ routeData, riskData, incidentsData, weathe
     setIsLoading(true);
 
     try {
-      const context = JSON.stringify(getContextInfoForAI(routeData, riskData, weather));
+      const context = JSON.stringify(getContextInfo(routeData, riskData, weather));
       const geminiResponse = await queryGeminiAI(userMsg, context);
       
       let response: string;

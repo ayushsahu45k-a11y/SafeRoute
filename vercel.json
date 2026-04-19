@@ -9,7 +9,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "npx prisma generate --schema=prisma/schema.prisma && vite build",
+        "buildCommand": "vite build",
         "outputDirectory": "dist"
       }
     }

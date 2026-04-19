@@ -1,140 +1,75 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, Calendar, Clock, MapPin, Navigation, Shield, Trash2, X, Share2, TrendingUp, Route, Loader2 } from 'lucide-react';
+import { BarChart3, Calendar, Clock, MapPin, Navigation, Shield, Trash2, X, Share2, TrendingUp, Route } from 'lucide-react';
 
 interface TripHistoryItem {
-  id: string;
+  id: number;
   startName: string;
   endName: string;
-  startLon: number;
-  startLat: number;
-  endLon: number;
-  endLat: number;
-  distanceKm: number;
-  durationMin: number;
+  startLoc: [number, number];
+  endLoc: [number, number];
+  distance: number;
+  duration: number;
   safetyScore: number;
   riskLevel: 'low' | 'moderate' | 'high';
+  weather: string;
   vehicleType: 'driving' | 'cycling';
-  createdAt: string;
+  timestamp: number;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: 'numeric'
   });
 }
 
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
 }
 
 export function TripHistory({ onClose }: { onClose: () => void }) {
   const [trips, setTrips] = useState<TripHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [selectedTab, setSelectedTab] = useState<'history' | 'stats'>('history');
 
   useEffect(() => {
-    fetchTrips();
+    try {
+      const saved = JSON.parse(localStorage.getItem('tripHistory') || '[]');
+      setTrips(saved);
+    } catch {
+      setTrips([]);
+    }
   }, []);
 
-  const fetchTrips = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        setError('Please login to view your trip history');
-        setLoading(false);
-        return;
-      }
+  const handleDelete = (id: number) => {
+    const updated = trips.filter(t => t.id !== id);
+    setTrips(updated);
+    localStorage.setItem('tripHistory', JSON.stringify(updated));
+  };
 
-      const API_URL = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${API_URL}/api/trips`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('userProfile');
-          setError('Session expired. Please login again.');
-          return;
-        }
-        throw new Error('Failed to fetch trips');
-      }
-
-      const data = await res.json();
-      setTrips(data.trips || []);
-    } catch (err) {
-      setError('Failed to load trips');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const handleClearAll = () => {
+    if (confirm('Clear all trip history?')) {
+      setTrips([]);
+      localStorage.removeItem('tripHistory');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const API_URL = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${API_URL}/api/trips/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (res.ok) {
-        setTrips(trips.filter(t => t.id !== id));
-      }
-    } catch (err) {
-      console.error('Failed to delete trip', err);
-    }
-  };
-
-  const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to delete all trip history? This cannot be undone.')) {
-      return;
-    }
-    
-    for (const trip of trips) {
-      await handleDelete(trip.id);
-    }
-  };
-
-  const totalDistance = trips.reduce((sum, t) => sum + (t.distanceKm || 0), 0);
-  const avgSafety = trips.length > 0 
-    ? Math.round(trips.reduce((sum, t) => sum + (t.safetyScore || 0), 0) / trips.length) 
-    : 0;
-  const totalTime = trips.reduce((sum, t) => sum + (t.durationMin || 0), 0);
+  const totalDistance = trips.reduce((sum, t) => sum + t.distance, 0);
+  const avgSafety = trips.length > 0 ? Math.round(trips.reduce((sum, t) => sum + t.safetyScore, 0) / trips.length) : 0;
+  const totalTime = trips.reduce((sum, t) => sum + t.duration, 0);
   const safeTrips = trips.filter(t => t.riskLevel === 'low').length;
 
   const stats = [
     { label: 'Total Trips', value: trips.length, icon: <Route size={20} />, color: 'emerald' },
-    { label: 'Total Distance', value: `${totalDistance.toFixed(1)} km`, icon: <Navigation size={20} />, color: 'blue' },
+    { label: 'Total Distance', value: `${(totalDistance / 1000).toFixed(1)} km`, icon: <Navigation size={20} />, color: 'blue' },
     { label: 'Avg Safety Score', value: `${avgSafety}%`, icon: <Shield size={20} />, color: avgSafety >= 70 ? 'emerald' : avgSafety >= 40 ? 'amber' : 'rose' },
     { label: 'Time Traveled', value: formatDuration(totalTime), icon: <Clock size={20} />, color: 'purple' },
     { label: 'Safe Trips', value: `${safeTrips}/${trips.length}`, icon: <TrendingUp size={20} />, color: 'emerald' },
   ];
-
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'low': return 'emerald';
-      case 'moderate': return 'amber';
-      case 'high': return 'rose';
-      default: return 'emerald';
-    }
-  };
 
   return (
     <motion.div
@@ -190,17 +125,7 @@ export function TripHistory({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <Route className="w-12 h-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
-              <p className="text-rose-500 font-medium">{error}</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">Your completed routes will appear here after login.</p>
-            </div>
-          ) : selectedTab === 'stats' ? (
+          {selectedTab === 'stats' ? (
             <div className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {stats.map((stat, i) => (
@@ -271,7 +196,7 @@ export function TripHistory({ onClose }: { onClose: () => void }) {
                           {trip.safetyScore}%
                         </span>
                         <span className="text-[10px] text-zinc-400 dark:text-zinc-500 flex items-center gap-0.5">
-                          <Calendar size={10} /> {formatDate(trip.createdAt)}
+                          <Calendar size={10} /> {formatDate(trip.timestamp)}
                         </span>
                       </div>
                       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{trip.startName}</p>
@@ -279,15 +204,15 @@ export function TripHistory({ onClose }: { onClose: () => void }) {
                         <Navigation size={10} /> {trip.endName}
                       </p>
                       <div className="flex gap-3 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span>{trip.distanceKm?.toFixed(1)} km</span>
-                        <span>{formatDuration(trip.durationMin || 0)}</span>
+                        <span>{(trip.distance / 1000).toFixed(1)} km</span>
+                        <span>{formatDuration(trip.duration)}</span>
                         <span>{trip.vehicleType === 'cycling' ? 'Bike' : 'Car'}</span>
                       </div>
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <button
                         onClick={() => {
-                          const url = `https://www.google.com/maps/dir/?api=1&origin=${trip.startLat},${trip.startLon}&destination=${trip.endLat},${trip.endLon}`;
+                          const url = `https://www.google.com/maps/dir/?api=1&origin=${trip.startLoc[1]},${trip.startLoc[0]}&destination=${trip.endLoc[1]},${trip.endLoc[0]}`;
                           window.open(url, '_blank');
                         }}
                         className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
