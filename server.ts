@@ -1,18 +1,33 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const prisma = new PrismaClient();
+
+let prisma: PrismaClient;
+
+function getPrisma() {
+  if (!prisma) {
+    prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/saferoute'
+        }
+      }
+    });
+  }
+  return prisma;
+}
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDnT-o1Lxw_NcEFA5f2yxI5qnrjEPWzHRQ';
 const JWT_SECRET = process.env.JWT_SECRET || 'saferoute-default-secret-key-2024';
 
@@ -83,10 +98,10 @@ app.post('/api/auth/register', async (req, res) => {
     console.log('Register attempt:', { name, email });
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
-    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const exists = await getPrisma().user.findUnique({ where: { email: email.toLowerCase() } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
+    const user = await getPrisma().user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
     const token = generateToken(user);
     console.log('User created:', user.id);
     res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
@@ -101,7 +116,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     console.log('Login attempt:', { email });
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await getPrisma().user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
@@ -117,7 +132,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req: any, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, name: true, email: true, role: true, photo: true, createdAt: true } });
+    const user = await getPrisma().user.findUnique({ where: { id: req.user.id }, select: { id: true, name: true, email: true, role: true, photo: true, createdAt: true } });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
   } catch { res.status(500).json({ error: 'Failed' }); }
@@ -126,7 +141,7 @@ app.get('/api/auth/me', authMiddleware, async (req: any, res) => {
 app.put('/api/auth/me', authMiddleware, async (req: any, res) => {
   try {
     const { name, photo } = req.body;
-    const user = await prisma.user.update({ where: { id: req.user.id }, data: { name, photo }, select: { id: true, name: true, email: true, role: true, photo: true } });
+    const user = await getPrisma().user.update({ where: { id: req.user.id }, data: { name, photo }, select: { id: true, name: true, email: true, role: true, photo: true } });
     res.json({ user });
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
@@ -134,9 +149,9 @@ app.put('/api/auth/me', authMiddleware, async (req: any, res) => {
 app.post('/api/auth/change-password', authMiddleware, async (req: any, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await getPrisma().user.findUnique({ where: { id: req.user.id } });
     if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) return res.status(401).json({ error: 'Wrong current password' });
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+    await getPrisma().user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
     res.json({ message: 'Password changed' });
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
@@ -146,24 +161,24 @@ app.post('/api/auth/change-password', authMiddleware, async (req: any, res) => {
 app.post('/api/trips', authMiddleware, async (req: any, res) => {
   try {
     const { startName, endName, startLon, startLat, endLon, endLat, distanceKm, durationMin, vehicleType, safetyScore, riskLevel } = req.body;
-    const trip = await prisma.trip.create({ data: { userId: req.user.id, startName, endName, startLon: +startLon, startLat: +startLat, endLon: +endLon, endLat: +endLat, distanceKm: +distanceKm || 0, durationMin: +durationMin || 0, vehicleType: vehicleType || 'driving', safetyScore: +safetyScore || 0, riskLevel: riskLevel || 'low' } });
+    const trip = await getPrisma().trip.create({ data: { userId: req.user.id, startName, endName, startLon: +startLon, startLat: +startLat, endLon: +endLon, endLat: +endLat, distanceKm: +distanceKm || 0, durationMin: +durationMin || 0, vehicleType: vehicleType || 'driving', safetyScore: +safetyScore || 0, riskLevel: riskLevel || 'low' } });
     res.status(201).json({ trip });
   } catch (e: any) { console.error(e); res.status(500).json({ error: 'Failed to save trip' }); }
 });
 
 app.get('/api/trips', authMiddleware, async (req: any, res) => {
   try {
-    const trips = await prisma.trip.findMany({ where: { userId: req.user.id }, orderBy: { createdAt: 'desc' }, take: 50 });
+    const trips = await getPrisma().trip.findMany({ where: { userId: req.user.id }, orderBy: { createdAt: 'desc' }, take: 50 });
     res.json({ trips });
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.delete('/api/trips/:id', authMiddleware, async (req: any, res) => {
   try {
-    const trip = await prisma.trip.findUnique({ where: { id: req.params.id } });
+    const trip = await getPrisma().trip.findUnique({ where: { id: req.params.id } });
     if (!trip) return res.status(404).json({ error: 'Not found' });
     if (trip.userId !== req.user.id) return res.status(403).json({ error: 'Not your trip' });
-    await prisma.trip.delete({ where: { id: req.params.id } });
+    await getPrisma().trip.delete({ where: { id: req.params.id } });
     res.json({ message: 'Deleted' });
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
@@ -174,7 +189,7 @@ app.post('/api/incidents', authMiddleware, async (req: any, res) => {
   try {
     const { type, lat, lon, description, severity } = req.body;
     if (!lat || !lon || !type) return res.status(400).json({ error: 'lat, lon and type required' });
-    const incident = await prisma.incident.create({ data: { reportedById: req.user.id, type, lat: +lat, lon: +lon, description, severity: severity || 'medium' }, include: { reportedBy: { select: { name: true } } } });
+    const incident = await getPrisma().incident.create({ data: { reportedById: req.user.id, type, lat: +lat, lon: +lon, description, severity: severity || 'medium' }, include: { reportedBy: { select: { name: true } } } });
     res.status(201).json({ incident });
   } catch (e: any) { console.error(e); res.status(500).json({ error: 'Failed' }); }
 });
@@ -187,14 +202,14 @@ app.get('/api/incidents', async (req, res) => {
       const d = parseFloat(radius as string) / 111;
       where = { ...where, lat: { gte: +lat! - d, lte: +lat! + d }, lon: { gte: +lon! - d, lte: +lon! + d } };
     }
-    const incidents = await prisma.incident.findMany({ where, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, type: true, lat: true, lon: true, description: true, severity: true, upvotes: true, createdAt: true } });
+    const incidents = await getPrisma().incident.findMany({ where, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, type: true, lat: true, lon: true, description: true, severity: true, upvotes: true, createdAt: true } });
     res.json({ incidents });
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.post('/api/incidents/:id/upvote', authMiddleware, async (req, res) => {
   try {
-    const incident = await prisma.incident.update({ where: { id: req.params.id }, data: { upvotes: { increment: 1 } } });
+    const incident = await getPrisma().incident.update({ where: { id: req.params.id }, data: { upvotes: { increment: 1 } } });
     res.json({ incident });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
@@ -207,8 +222,8 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req: any, re
     const skip = (+page - 1) * +limit;
     const where = search ? { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { email: { contains: search, mode: 'insensitive' as const } }] } : {};
     const [users, total] = await Promise.all([
-      prisma.user.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, email: true, role: true, isBanned: true, photo: true, createdAt: true, _count: { select: { trips: true, incidents: true } } } }),
-      prisma.user.count({ where })
+      getPrisma().user.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, email: true, role: true, isBanned: true, photo: true, createdAt: true, _count: { select: { trips: true, incidents: true } } } }),
+      getPrisma().user.count({ where })
     ]);
     res.json({ users, total, page: +page, pages: Math.ceil(total / +limit) });
   } catch { res.status(500).json({ error: 'Failed' }); }
@@ -218,14 +233,14 @@ app.put('/api/admin/users/:id/role', authMiddleware, strictAdminMiddleware, asyn
   try {
     const { role } = req.body;
     if (!['user', 'moderator', 'admin'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
-    const user = await prisma.user.update({ where: { id: req.params.id }, data: { role }, select: { id: true, name: true, role: true } });
+    const user = await getPrisma().user.update({ where: { id: req.params.id }, data: { role }, select: { id: true, name: true, role: true } });
     res.json({ user });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
 
 app.put('/api/admin/users/:id/ban', authMiddleware, adminMiddleware, async (req: any, res) => {
   try {
-    const user = await prisma.user.update({ where: { id: req.params.id }, data: { isBanned: req.body.isBanned }, select: { id: true, name: true, isBanned: true } });
+    const user = await getPrisma().user.update({ where: { id: req.params.id }, data: { isBanned: req.body.isBanned }, select: { id: true, name: true, isBanned: true } });
     res.json({ user });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
@@ -233,7 +248,7 @@ app.put('/api/admin/users/:id/ban', authMiddleware, adminMiddleware, async (req:
 app.delete('/api/admin/users/:id', authMiddleware, strictAdminMiddleware, async (req: any, res) => {
   try {
     if (req.params.id === (req as any).user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-    await prisma.user.delete({ where: { id: req.params.id } });
+    await getPrisma().user.delete({ where: { id: req.params.id } });
     res.json({ message: 'User deleted' });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
@@ -244,8 +259,8 @@ app.get('/api/admin/incidents', authMiddleware, adminMiddleware, async (req: any
     const skip = (+page - 1) * +limit;
     const where = status ? { status: status as any } : {};
     const [incidents, total] = await Promise.all([
-      prisma.incident.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, include: { reportedBy: { select: { name: true, email: true } } } }),
-      prisma.incident.count({ where })
+      getPrisma().incident.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, include: { reportedBy: { select: { name: true, email: true } } } }),
+      getPrisma().incident.count({ where })
     ]);
     res.json({ incidents, total, page: +page });
   } catch { res.status(500).json({ error: 'Failed' }); }
@@ -254,14 +269,14 @@ app.get('/api/admin/incidents', authMiddleware, adminMiddleware, async (req: any
 app.put('/api/admin/incidents/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status, severity } = req.body;
-    const incident = await prisma.incident.update({ where: { id: req.params.id }, data: { ...(status && { status }), ...(severity && { severity }) } });
+    const incident = await getPrisma().incident.update({ where: { id: req.params.id }, data: { ...(status && { status }), ...(severity && { severity }) } });
     res.json({ incident });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
 
 app.delete('/api/admin/incidents/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await prisma.incident.delete({ where: { id: req.params.id } });
+    await getPrisma().incident.delete({ where: { id: req.params.id } });
     res.json({ message: 'Deleted' });
   } catch { res.status(404).json({ error: 'Not found' }); }
 });
@@ -272,14 +287,14 @@ app.get('/api/admin/analytics', authMiddleware, adminMiddleware, async (_req, re
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(todayStart); weekStart.setDate(weekStart.getDate() - 7);
     const [totalUsers, totalTrips, totalIncidents, usersToday, tripsToday, incidentsToday, tripsThisWeek, pendingIncidents, highRiskTrips, vehicleStats] = await Promise.all([
-      prisma.user.count(), prisma.trip.count(), prisma.incident.count(),
-      prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
-      prisma.trip.count({ where: { createdAt: { gte: todayStart } } }),
-      prisma.incident.count({ where: { createdAt: { gte: todayStart } } }),
-      prisma.trip.count({ where: { createdAt: { gte: weekStart } } }),
-      prisma.incident.count({ where: { status: 'pending' } }),
-      prisma.trip.count({ where: { riskLevel: 'high' } }),
-      prisma.trip.groupBy({ by: ['vehicleType'], _count: true })
+      getPrisma().user.count(), getPrisma().trip.count(), getPrisma().incident.count(),
+      getPrisma().user.count({ where: { createdAt: { gte: todayStart } } }),
+      getPrisma().trip.count({ where: { createdAt: { gte: todayStart } } }),
+      getPrisma().incident.count({ where: { createdAt: { gte: todayStart } } }),
+      getPrisma().trip.count({ where: { createdAt: { gte: weekStart } } }),
+      getPrisma().incident.count({ where: { status: 'pending' } }),
+      getPrisma().trip.count({ where: { riskLevel: 'high' } }),
+      getPrisma().trip.groupBy({ by: ['vehicleType'], _count: true })
     ]);
     res.json({ totalUsers, totalTrips, totalIncidents, usersToday, tripsToday, incidentsToday, tripsThisWeek, pendingIncidents, highRiskTrips, vehicleStats });
   } catch { res.status(500).json({ error: 'Failed' }); }
