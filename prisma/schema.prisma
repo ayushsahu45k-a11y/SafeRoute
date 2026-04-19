@@ -1,1 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  moderator
+  admin
+}
+
+enum TripRiskLevel {
+  low
+  moderate
+  high
+}
+
+enum VehicleType {
+  driving
+  cycling
+  walking
+}
+
+enum IncidentStatus {
+  pending
+  approved
+  rejected
+}
+
+enum IncidentSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum TokenType {
+  refresh
+  reset
+  verification
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  photo         String?
+  role          Role      @default(user)
+  isBanned      Boolean   @default(false)
+  isVerified    Boolean   @default(false)
+  lastLoginAt   DateTime?
+  loginAttempts Int       @default(0)
+  lockedUntil   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  trips      Trip[]
+  incidents  Incident[]
+  tokens     Token[]
+  sessions   Session[]
+  auditLogs  AuditLog[]
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Token {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Trip {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startName    String
+  endName      String
+  startLon     Float
+  startLat     Float
+  endLon       Float
+  endLat       Float
+  distanceKm   Float
+  durationMin  Int
+  vehicleType  VehicleType  @default(driving)
+  safetyScore  Int          @default(0)
+  riskLevel    TripRiskLevel @default(low)
+  routeData    Json?
+  weather      String?
+  createdAt    DateTime     @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([riskLevel])
+}
+
+model Incident {
+  id           String          @id @default(cuid())
+  reportedById String
+  reportedBy   User            @relation(fields: [reportedById], references: [id], onDelete: Cascade)
+  type         String
+  lat          Float
+  lon          Float
+  description  String?
+  severity    IncidentSeverity @default(medium)
+  status      IncidentStatus   @default(pending)
+  upvotes     Int             @default(0)
+  images      String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([reportedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([lat, lon])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AppConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
