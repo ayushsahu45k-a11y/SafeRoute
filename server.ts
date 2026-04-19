@@ -14,17 +14,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const prisma = new PrismaClient();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDnT-o1Lxw_NcEFA5f2yxI5qnrjEPWzHRQ';
+const JWT_SECRET = process.env.JWT_SECRET || 'saferoute-default-secret-key-2024';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function generateToken(user: { id: string; email: string; role: string }) {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 function authMiddleware(req: any, res: any, next: any) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'No token' });
-    req.user = jwt.verify(token, process.env.JWT_SECRET!);
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch { res.status(401).json({ error: 'Invalid token' }); }
 }
@@ -79,25 +80,39 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
+    console.log('Register attempt:', { name, email });
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
     const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
-    res.status(201).json({ token: generateToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
-  } catch (e: any) { console.error(e); res.status(500).json({ error: 'Registration failed' }); }
+    const token = generateToken(user);
+    console.log('User created:', user.id);
+    res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
+  } catch (e: any) { 
+    console.error('Registration error:', e); 
+    res.status(500).json({ error: 'Registration failed', details: e.message }); 
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt:', { email });
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
     if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
-    res.json({ token: generateToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
-  } catch (e: any) { res.status(500).json({ error: 'Login failed' }); }
+    const token = generateToken(user);
+    console.log('User logged in:', user.id);
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
+  } catch (e: any) { 
+    console.error('Login error:', e);
+    res.status(500).json({ error: 'Login failed' }); 
+  }
 });
 
 app.get('/api/auth/me', authMiddleware, async (req: any, res) => {
