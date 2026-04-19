@@ -1,0 +1,5 @@
+{
+  "name": "SafeRoute",
+  "description": "Smart Traffic & Accident Risk Prediction Web Application with real-time prediction and route calculation.",
+  "requestFramePermissions": []
+}
