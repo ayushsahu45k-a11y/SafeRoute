@@ -315,7 +315,7 @@ export default function MapView({
                 exit={{ scale: 0, opacity: 0 }}
                 className="flex flex-col items-center text-blue-500 drop-shadow-md cursor-pointer hover:scale-110 transition-transform"
                 onClick={(e) => {
-                  e.originalEvent.stopPropagation();
+                  (e as any).stopPropagation();
                   if (setEndLoc && setEndQuery) {
                     setEndLoc([parseFloat(poi.lon || poi.center?.[0]), parseFloat(poi.lat || poi.center?.[1])]);
                     setEndQuery(poi.display_name || poi.place_name);
