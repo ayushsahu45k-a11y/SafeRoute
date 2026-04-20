@@ -13,9 +13,14 @@ import { PrismaClient } from '@prisma/client';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log('=== SERVER START ===');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+export const prisma = globalForPrisma.prisma || new PrismaClient({
+  log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn'],
+});
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
@@ -89,38 +94,46 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.post('/api/auth/register', async (req, res) => {
   try {
+    console.log('[AUTH] Register attempt');
     const { name, email, password } = req.body;
-    console.log('Register attempt:', { name, email });
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
-    const exists = await getPrisma().user.findUnique({ where: { email: email.toLowerCase() } });
+    
+    const db = getPrisma();
+    const exists = await db.user.findUnique({ where: { email: email.toLowerCase() } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
+    
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await getPrisma().user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
+    const user = await db.user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
     const token = generateToken(user);
-    console.log('User created:', user.id);
+    
+    console.log('[AUTH] User created:', user.id);
     res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
   } catch (e: any) { 
-    console.error('Registration error:', e); 
+    console.error('[AUTH] Registration error:', e); 
     res.status(500).json({ error: 'Registration failed', details: e.message }); 
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    console.log('[AUTH] Login attempt');
     const { email, password } = req.body;
-    console.log('Login attempt:', { email });
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const user = await getPrisma().user.findUnique({ where: { email: email.toLowerCase() } });
+    
+    const db = getPrisma();
+    const user = await db.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
     if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
+    
     const token = generateToken(user);
-    console.log('User logged in:', user.id);
+    console.log('[AUTH] User logged in:', user.id);
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
   } catch (e: any) { 
-    console.error('Login error:', e);
+    console.error('[AUTH] Login error:', e);
     res.status(500).json({ error: 'Login failed' }); 
   }
 });
