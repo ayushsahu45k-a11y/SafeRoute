@@ -163,6 +163,17 @@ app.get('/api/health', async (req, res) => {
 // ═══ AUTH ══════════════════════════════════════════════════════════════════
 
 app.post('/api/auth/register', async (req, res) => {
+  const { DEMO_MODE } = process.env;
+  if (DEMO_MODE === 'true') {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
+    const demoUser = { id: 'demo-' + Date.now(), name, email: email.toLowerCase(), role: 'user', photo: null };
+    const token = generateToken(demoUser);
+    console.log('[AUTH] Demo register:', demoUser.id);
+    return res.status(201).json({ token, user: demoUser });
+  }
+  
   let retries = 3;
   while (retries > 0) {
     try {
@@ -198,6 +209,16 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  const { DEMO_MODE } = process.env;
+  if (DEMO_MODE === 'true') {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const demoUser = { id: 'demo-' + Date.now(), name: email.split('@')[0], email: email.toLowerCase(), role: 'user', photo: null };
+    const token = generateToken(demoUser);
+    console.log('[AUTH] Demo login:', demoUser.id);
+    return res.json({ token, user: demoUser });
+  }
+  
   let retries = 3;
   while (retries > 0) {
     try {
