@@ -219,4 +219,4 @@ MIT License - feel free to use this project for learning and development.
 
 ## 👨‍💻 Created By
 
-Made with ❤️ by [Ayush Sahu](https://github.com/ayushsahu45k-a11y)
+Made with  by [Ayush Sahu](https://github.com/ayushsahu45k-a11y)
