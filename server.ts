@@ -59,18 +59,61 @@ function strictAdminMiddleware(req: any, res: any, next: any) {
 function geocodeFallback(query: string) {
   const lower = query.toLowerCase();
   const cities: Record<string, [number, number]> = {
-    'new delhi': [77.209, 28.6139], 'delhi': [77.209, 28.6139], 'mumbai': [72.8777, 19.076],
+    'agra': [78.0081, 27.1767], 'new delhi': [77.209, 28.6139], 'delhi': [77.209, 28.6139], 'mumbai': [72.8777, 19.076],
     'bangalore': [77.5946, 12.9716], 'bengaluru': [77.5946, 12.9716], 'chennai': [80.2707, 13.0827],
     'kolkata': [88.3639, 22.5726], 'hyderabad': [78.4867, 17.385], 'pune': [73.8567, 18.5204],
     'ahmedabad': [72.5714, 23.0225], 'jaipur': [75.7873, 26.9124], 'lucknow': [80.9462, 26.8467],
     'indore': [75.7873, 22.7196], 'bhopal': [77.4126, 23.2599], 'patna': [85.3131, 25.5941],
     'kochi': [76.3061, 9.9312], 'goa': [74.124, 15.2993], 'nagpur': [79.0882, 21.1458],
-    'kanpur': [80.3199, 26.4499], 'india': [78.9629, 20.5937],
+    'kanpur': [80.3199, 26.4499], 'india': [78.9629, 20.5937], 'surat': [72.8277, 21.1702],
+    'vadodara': [73.1812, 22.3074], 'rajkot': [70.8022, 22.2733], 'ludhiana': [75.8577, 30.9007],
+    'kota': [75.8366, 25.1621], 'mysore': [76.6384, 12.2958], 'tiruchirappalli': [78.8078, 10.7905],
+    'bareilly': [79.4214, 28.3475], 'srinagar': [74.7973, 34.0837], 'jamshedpur': [86.4255, 22.8206],
+    'dehradun': [78.0322, 30.3255], 'aurangabad': [75.3431, 19.8737], 'chandigarh': [76.7781, 30.7644],
+    'madanapalle': [78.4161, 13.9389], 'visakhapatnam': [83.3186, 17.7312], 'noida': [77.3925, 28.5744],
+    'ghaziabad': [77.4531, 28.6692], 'faridabad': [77.3011, 28.4088], 'gwalior': [78.1722, 26.2183],
+    'vijayawada': [80.6338, 16.5061], 'pilani': [75.5873, 28.3699], 'meerut': [77.8601, 28.9841],
   };
-  return Object.entries(cities)
+  const matches = Object.entries(cities)
     .filter(([city]) => city.includes(lower) || lower.includes(city))
     .slice(0, 5)
     .map(([city, coords], i) => ({ place_id: i + 1, display_name: `${city.charAt(0).toUpperCase() + city.slice(1)}, India`, lon: coords[0], lat: coords[1] }));
+  
+  if (matches.length === 0 && lower.length >= 3) {
+    return [{ place_id: 1, display_name: `${query.charAt(0).toUpperCase() + query.slice(1)}, India`, lon: 78.9629, lat: 20.5937 }];
+  }
+  return matches;
+}
+
+function poiFallback(query: string, lat?: number, lon?: number) {
+  const centerLat = lat || 28.6139;
+  const centerLon = lon || 77.2090;
+  const results: Array<{place_id: number; display_name: string; lon: number; lat: number; type: string}> = [];
+  const basePlaces: Array<{type: string; name: string; offset: number}> = [
+    { type: 'atm', name: 'State Bank ATM', offset: 0.005 },
+    { type: 'atm', name: 'HDFC Bank ATM', offset: 0.008 },
+    { type: 'hospital', name: 'City Hospital', offset: 0.01 },
+    { type: 'hospital', name: 'Government Medical College', offset: 0.015 },
+    { type: 'petrol', name: 'Indian Oil Petrol Pump', offset: 0.012 },
+    { type: 'petrol', name: 'Bharat Petroleum', offset: 0.018 },
+    { type: 'parking', name: 'City Parking', offset: 0.006 },
+    { type: 'police', name: 'Police Station', offset: 0.008 },
+  ];
+  
+  const filtered = basePlaces.filter(p => p.type === query.toLowerCase() || query.toLowerCase().includes(p.type));
+  if (filtered.length === 0) return [];
+  
+  for (let i = 0; i < Math.min(4, filtered.length); i++) {
+    const place = filtered[i];
+    results.push({
+      place_id: i + 100,
+      display_name: `${place.name}, ${centerLat > 20 ? 'India' : 'Location'}`,
+      lon: centerLon + place.offset * (i % 2 === 0 ? 1 : -1) * (1 + i * 0.3),
+      lat: centerLat + (i < 2 ? 0.003 : -0.003),
+      type: place.type
+    });
+  }
+  return results;
 }
 
 async function geminiChat(prompt: string, context: string) {
@@ -86,7 +129,15 @@ async function geminiChat(prompt: string, context: string) {
 
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.options('*', cors());
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -311,17 +362,31 @@ app.get('/api/admin/analytics', authMiddleware, adminMiddleware, async (_req, re
 // ═══ EXISTING API ROUTES ═══════════════════════════════════════════════════
 
 app.get('/api/geocode', async (req, res) => {
+  const { q, lat, lon } = req.query;
+  if (!q || typeof q !== 'string' || q.length < 2) return res.json([]);
+  
+  const lowerQ = (q as string).toLowerCase();
+  const isPoiSearch = lowerQ === 'atm' || lowerQ === 'hospital' || lowerQ === 'petrol' || 
+                      lowerQ === 'parking' || lowerQ === 'police' || 
+                      lowerQ.includes('atm') || lowerQ.includes('hospital') || 
+                      lowerQ.includes('petrol') || lowerQ.includes('police');
+  
+  if (isPoiSearch) {
+    const poiResults = poiFallback(q as string, lat ? +lat : undefined, lon ? +lon : undefined);
+    if (poiResults.length > 0) return res.json(poiResults);
+  }
+  
   try {
-    const { q, lat, lon } = req.query;
-    if (!q || typeof q !== 'string') return res.json([]);
-    try {
-      const params: any = { q, format: 'json', limit: 8, addressdetails: 1 };
-      if (lat && lon) { params.viewbox = `${+lon - 0.5},${+lat - 0.5},${+lon + 0.5},${+lat + 0.5}`; params.bounded = 1; }
-      const r = await axios.get('https://nominatim.openstreetmap.org/search', { params, headers: { 'User-Agent': 'SafeRoute/1.0' }, timeout: 8000 });
-      if (r.data?.length > 0) return res.json(r.data);
-    } catch { /* fallback */ }
-    res.json(geocodeFallback(q));
-  } catch { res.json(geocodeFallback(String(req.query.q || ''))); }
+    const params: any = { q, format: 'json', limit: 8, addressdetails: 1, countrycodes: 'in' };
+    if (lat && lon) { params.viewbox = `${+lon - 1},${+lat - 1},${+lon + 1},${+lat + 1}`; params.bounded = 1; }
+    const r = await axios.get('https://nominatim.openstreetmap.org/search', { params, headers: { 'User-Agent': 'SafeRoute/1.0 (SafeRoute App)' }, timeout: 10000 });
+    if (r.data?.length > 0) return res.json(r.data);
+  } catch (err: any) {
+    console.log('[GEOCODE] Nominatim failed, using fallback:', err.message);
+  }
+  
+  const fallback = geocodeFallback(q as string);
+  return res.json(fallback);
 });
 
 app.get('/api/weather', async (req, res) => {

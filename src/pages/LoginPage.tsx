@@ -66,17 +66,19 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const url = API_URL ? `${API_URL}/api/auth/login` : '/api/auth/login';
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginData)
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Login failed (${res.status})`);
       }
+
+      const data = await res.json();
 
       const user = {
         id: data.user.id,
@@ -95,7 +97,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         setShowLocationPrompt(true);
       }
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || 'Network error. Please check if the server is running.';
+      setError(message.includes('Failed to fetch') ? 'Cannot connect to server. Please try again.' : message);
     } finally {
       setLoading(false);
     }
@@ -119,7 +122,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${API_URL}/api/auth/register`, {
+      const url = API_URL ? `${API_URL}/api/auth/register` : '/api/auth/register';
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,11 +133,12 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Registration failed (${res.status})`);
       }
+
+      const data = await res.json();
 
       const user = {
         id: data.user.id,
@@ -152,7 +157,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         setShowLocationPrompt(true);
       }
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || 'Network error. Please check if the server is running.';
+      setError(message.includes('Failed to fetch') ? 'Cannot connect to server. Please try again.' : message);
     } finally {
       setLoading(false);
     }
