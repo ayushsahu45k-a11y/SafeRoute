@@ -8,7 +8,7 @@ It combines **Machine Learning, real-time APIs, and modern web architecture** to
 ---
 
 ## 🌐 Live Demo
-> Coming Soon...
+> https://safe-route-cyan.vercel.app
 
 ---
 
