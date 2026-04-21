@@ -28,6 +28,15 @@ function getPrisma() {
   return prisma;
 }
 
+async function testConnection() {
+  try {
+    await prisma.$connect();
+    console.log('Database connected successfully');
+  } catch (err) {
+    console.error('Database connection failed:', err);
+  }
+}
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDnT-o1Lxw_NcEFA5f2yxI5qnrjEPWzHRQ';
 const JWT_SECRET = process.env.JWT_SECRET || 'saferoute-default-secret-key-2024';
 
@@ -141,51 +150,85 @@ app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (err: any) {
+    console.error('Health check failed:', err);
+    res.json({ status: 'error', database: 'disconnected', error: err.message });
+  }
+});
+
 // ═══ AUTH ══════════════════════════════════════════════════════════════════
 
 app.post('/api/auth/register', async (req, res) => {
-  try {
-    console.log('[AUTH] Register attempt');
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
-    if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
-    
-    const db = getPrisma();
-    const exists = await db.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (exists) return res.status(409).json({ error: 'Email already registered' });
-    
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await db.user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
-    const token = generateToken(user);
-    
-    console.log('[AUTH] User created:', user.id);
-    res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
-  } catch (e: any) { 
-    console.error('[AUTH] Registration error:', e); 
-    res.status(500).json({ error: 'Registration failed', details: e.message }); 
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      console.log('[AUTH] Register attempt');
+      const { name, email, password } = req.body;
+      if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' });
+      if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
+      
+      const db = getPrisma();
+      await db.$connect();
+      
+      const exists = await db.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (exists) return res.status(409).json({ error: 'Email already registered' });
+      
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await db.user.create({ data: { name, email: email.toLowerCase(), passwordHash } });
+      const token = generateToken(user);
+      
+      console.log('[AUTH] User created:', user.id);
+      return res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
+    } catch (e: any) { 
+      retries--;
+      console.error('[AUTH] Registration error (retries left:', retries, '):', e.message);
+      if (retries === 0) {
+        const message = e.message?.includes('database') || e.message?.includes('connection') || e.message?.includes('timeout')
+          ? 'Server busy. Please try again.' 
+          : 'Registration failed';
+        return res.status(500).json({ error: message }); 
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    console.log('[AUTH] Login attempt');
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    
-    const db = getPrisma();
-    const user = await db.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
-    if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
-    
-    const token = generateToken(user);
-    console.log('[AUTH] User logged in:', user.id);
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
-  } catch (e: any) { 
-    console.error('[AUTH] Login error:', e);
-    res.status(500).json({ error: 'Login failed' }); 
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      console.log('[AUTH] Login attempt');
+      const { email, password } = req.body;
+      if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+      
+      const db = getPrisma();
+      await db.$connect();
+      
+      const user = await db.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+      
+      const isValid = await bcrypt.compare(password, user.passwordHash);
+      if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+      if (user.isBanned) return res.status(403).json({ error: 'Account banned' });
+      
+      const token = generateToken(user);
+      console.log('[AUTH] User logged in:', user.id);
+      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, photo: user.photo } });
+    } catch (e: any) { 
+      retries--;
+      console.error('[AUTH] Login error (retries left:', retries, '):', e.message);
+      if (retries === 0) {
+        const message = e.message?.includes('database') || e.message?.includes('connection') || e.message?.includes('timeout')
+          ? 'Server busy. Please try again.' 
+          : 'Login failed';
+        return res.status(500).json({ error: message }); 
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
 });
 
